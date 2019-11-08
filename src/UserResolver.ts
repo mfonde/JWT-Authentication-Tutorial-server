@@ -1,6 +1,15 @@
-import { Resolver, Query, Mutation, Arg } from 'type-graphql';
-import { hash } from 'bcryptjs';
+import { Resolver, Query, Mutation, Arg, ObjectType, Field, Ctx, UseMiddleware } from 'type-graphql';
+import { hash, compare } from 'bcryptjs';
 import { User } from './entity/User';
+import { MyContext } from './MyContext';
+import { createRefreshToken, createAccessToken } from './auth';
+import { isAuth } from './isAuth';
+
+@ObjectType()
+class LoginResponse {
+    @Field()
+    accessToken: string
+}
 
 @Resolver() 
 export class UserResolver {
@@ -9,10 +18,50 @@ export class UserResolver {
         return 'hi!'
     }
 
+    @Query(() => String) 
+    @UseMiddleware(isAuth)
+    goodbye() {
+        return 'goodbye!'
+    }
+
     @Query(() => [User]) 
     users() {
         return User.find();
     }
+
+    @Mutation(() => LoginResponse)
+    async login(
+        @Arg('email') email: string,
+        @Arg('password') password: string,
+        @Ctx() { res }: MyContext
+        ): Promise<LoginResponse> {
+        
+        const user = await User.findOne({ where: { email }});
+        
+        if (!user) {
+            throw new Error ('invalid login');
+        }
+
+        const valid = await compare(password, user.password) //IF YOU DO NOT AWAIT COMPARE, IT WILL LOG YOU IN WITH ANY PASSWORD.
+
+        if (!valid) {
+            throw new Error ('invalid login');
+        }
+
+        // LOGIN SUCCESSFUL
+
+        res.cookie(
+            'jid', createRefreshToken(user),
+                {
+                    httpOnly:true
+                }
+        )
+
+        return {
+            accessToken: createAccessToken(user)
+        };
+    }
+
 
     @Mutation(() => Boolean)
     async register(
