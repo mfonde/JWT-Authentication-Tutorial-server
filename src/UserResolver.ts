@@ -4,6 +4,7 @@ import { User } from './entity/User';
 import { MyContext } from './MyContext';
 import { createRefreshToken, createAccessToken } from './auth';
 import { isAuth } from './isAuth';
+import { sendRefreshToken } from './SendRefreshToken';
 
 @ObjectType()
 class LoginResponse {
@@ -20,8 +21,9 @@ export class UserResolver {
 
     @Query(() => String) 
     @UseMiddleware(isAuth)
-    goodbye() {
-        return 'goodbye!'
+    bye(@Ctx() { payload }: MyContext) {
+        console.log(payload);
+        return `your user id is: ${payload!.userId}`;
     }
 
     @Query(() => [User]) 
@@ -33,7 +35,7 @@ export class UserResolver {
     async login(
         @Arg('email') email: string,
         @Arg('password') password: string,
-        @Ctx() { res }: MyContext
+        @Ctx() { res} : MyContext
         ): Promise<LoginResponse> {
         
         const user = await User.findOne({ where: { email }});
@@ -49,13 +51,17 @@ export class UserResolver {
         }
 
         // LOGIN SUCCESSFUL
+        
+        sendRefreshToken(res, createRefreshToken(user))
 
-        res.cookie(
-            'jid', createRefreshToken(user),
-                {
-                    httpOnly:true
-                }
-        )
+        // res.cookie(
+        //     'jid', createRefreshToken(user),
+        //         {
+        //             httpOnly:true
+        //         }
+        // )
+
+
 
         return {
             accessToken: createAccessToken(user)
